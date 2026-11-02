@@ -1,0 +1,19 @@
+{
+  "name": "梅岡歲月 3D 數位校史館 | 桃園市立楊梅高中",
+  "short_name": "梅高3D校史館",
+  "description": "桃園市立楊梅高級中等學校 1948-2018 互動式 3D 校史博物館：菁莪慶花甲、迎曦御風七十載",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070b19",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

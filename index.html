@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="桃園市立楊梅高級中等學校 1948-2018 互動式 3D 校史博物館：菁莪慶花甲、迎曦御風七十載" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>梅岡歲月 3D 數位校史館 | 楊梅高中 1948-2018</title>
+  
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+
+  <!-- Tailwind CSS & Three.js CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #070b19;
+      font-family: 'Noto Sans TC', sans-serif;
+      color: #f8fafc;
+    }
+
+    .serif-title {
+      font-family: 'Noto Serif TC', serif;
+    }
+
+    #webgl-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      outline: none;
+    }
+
+    /* 玻璃擬態 UI */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(244, 114, 182, 0.25);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 25px rgba(236, 72, 153, 0.15);
+    }
+
+    /* 自訂捲軸 */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(236, 72, 153, 0.5);
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(236, 72, 153, 0.8);
+    }
+
+    /* 標籤發光動畫 */
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 12px rgba(236, 72, 153, 0.4); }
+      50% { box-shadow: 0 0 24px rgba(236, 72, 153, 0.85); }
+    }
+    .glow-btn {
+      animation: pulse-glow 3s infinite;
+    }
+
+    /* 允許卡片內文字複製 */
+    .selectable-text {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+  </style>
+</head>
+<body class="relative">
+
+  <!-- 3D 畫布 -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- 頂部導覽列 (RWD) -->
+  <header class="fixed top-0 left-0 right-0 z-20 p-3 md:px-6 md:py-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <!-- 品牌標題 -->
+    <div class="glass-panel px-4 py-2.5 rounded-2xl flex items-center gap-3 pointer-events-auto">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 flex items-center justify-center shadow-lg shrink-0">
+        <span class="serif-title font-black text-lg text-white">梅岡</span>
+      </div>
+      <div>
+        <h1 class="serif-title font-bold text-base md:text-xl tracking-wider text-white flex items-center gap-2">
+          楊梅高中 3D 校史博物館
+          <span class="hidden sm:inline-block text-xs font-normal px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">1948 - 2018</span>
+        </h1>
+        <p class="text-[11px] md:text-xs text-slate-300 tracking-wide">德厚流廣．灼爍梅岡｜迎曦御風七十載</p>
+      </div>
+    </div>
+
+    <!-- 分類篩選與功能按鈕 -->
+    <div class="flex items-center gap-1.5 md:gap-2 pointer-events-auto overflow-x-auto max-w-full py-1 custom-scroll">
+      <button onclick="filterCategory('all')" data-cat="all" class="cat-btn active px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all bg-pink-600 text-white shadow-lg shrink-0">
+        全部 (33)
+      </button>
+      <button onclick="filterCategory('milestone')" data-cat="milestone" class="cat-btn px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-slate-200 hover:bg-pink-500/20 shrink-0">
+        🏛️ 創校與改制
+      </button>
+      <button onclick="filterCategory('campus')" data-cat="campus" class="cat-btn px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-slate-200 hover:bg-pink-500/20 shrink-0">
+        🏗️ 校園建設
+      </button>
+      <button onclick="filterCategory('memory')" data-cat="memory" class="cat-btn px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-slate-200 hover:bg-pink-500/20 shrink-0">
+        🌸 梅岡記憶
+      </button>
+      <button onclick="filterCategory('honor')" data-cat="honor" class="cat-btn px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-slate-200 hover:bg-pink-500/20 shrink-0">
+        🏆 卓越榮耀
+      </button>
+      <button onclick="toggleAutoPlay()" id="autoplay-btn" class="px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-amber-300 border-amber-400/40 hover:bg-amber-500/20 shrink-0">
+        ▶ 自動導覽
+      </button>
+      <button onclick="toggleModal('search-modal')" class="px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all glass-panel text-sky-300 hover:bg-sky-500/20 shrink-0" title="大事記總覽與搜尋">
+        🔍 總覽
+      </button>
+      <button id="pwa-install-btn" onclick="installPWA()" class="hidden px-3 py-1.5 rounded-xl text-xs md:text-sm font-medium transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shrink-0">
+        📲 安裝應用
+      </button>
+    </div>
+  </header>
+
+  <!-- 左側/底部 資訊展示卡片 (RWD 自適應) -->
+  <main class="fixed bottom-16 md:bottom-20 left-0 right-0 md:left-6 md:right-auto z-20 px-3 md:px-0 md:w-[440px] lg:w-[480px] pointer-events-none">
+    <article id="info-card" class="glass-panel rounded-2xl p-4 md:p-6 pointer-events-auto transition-all duration-300 max-h-[52vh] md:max-h-[68vh] flex flex-col">
+      <!-- 卡片頂部：年份與分類標籤 -->
+      <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
+        <div class="flex items-center gap-2">
+          <span id="card-year" class="serif-title text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-amber-300">
+            1948
+          </span>
+          <span id="card-roc" class="text-xs md:text-sm text-slate-400 font-medium">
+            (民國37年8月)
+          </span>
+        </div>
+        <span id="card-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-pink-500/20 text-pink-300 border border-pink-500/30">
+          創校與改制
+        </span>
+      </div>
+
+      <!-- 卡片標題 -->
+      <h2 id="card-title" class="serif-title text-lg md:text-xl font-bold text-white mb-3 leading-snug shrink-0 selectable-text">
+        縣立楊梅初中創校
+      </h2>
+
+      <!-- 卡片內文捲動區 -->
+      <div class="overflow-y-auto custom-scroll pr-1 space-y-3 selectable-text flex-1">
+        <ul id="card-points" class="space-y-1.5 text-xs md:text-sm text-slate-200 leading-relaxed list-disc list-inside">
+          <!-- 動態載入條列重點 -->
+        </ul>
+
+        <!-- 梅岡記憶/文獻引言區塊 -->
+        <div id="card-quote-box" class="hidden mt-3 p-3 rounded-xl bg-slate-900/80 border-l-4 border-amber-400 text-xs md:text-sm text-amber-100/90 italic leading-relaxed">
+          <p id="card-quote"></p>
+          <p id="card-quote-author" class="text-right text-[11px] text-amber-300/80 mt-1 not-italic font-medium"></p>
+        </div>
+      </div>
+
+      <!-- 卡片底部控制按鈕 -->
+      <div class="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between shrink-0">
+        <button onclick="navigateStep(-1)" class="px-3.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-pink-600/80 text-xs md:text-sm font-medium text-slate-200 hover:text-white transition flex items-center gap-1">
+          ← 上一站
+        </button>
+        <div class="text-xs text-slate-400 font-mono">
+          <span id="card-index">1</span> / <span id="card-total">33</span>
+        </div>
+        <button onclick="navigateStep(1)" class="px-3.5 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-xs md:text-sm font-medium text-white transition flex items-center gap-1 shadow-md">
+          下一站 →
+        </button>
+      </div>
+    </article>
+  </main>
+
+  <!-- 右側操作提示與快速地標 (僅桌機顯示) -->
+  <aside class="hidden lg:flex fixed right-6 top-24 z-20 flex-col gap-3 w-64 pointer-events-none">
+    <div class="glass-panel p-4 rounded-2xl pointer-events-auto">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-pink-400 mb-2 flex items-center justify-between">
+        <span>✨ 梅岡五絕景與名勝</span>
+        <span class="text-[10px] text-slate-400">點擊跳轉</span>
+      </h3>
+      <div class="grid grid-cols-2 gap-1.5 text-xs">
+        <button onclick="jumpToYear(1948)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">🌱 1948 初中創校</button>
+        <button onclick="jumpToYear(1968)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">🏫 1968 省高籌備</button>
+        <button onclick="jumpToId('mem-landscape')" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-amber-200 transition truncate">⛰️ 好漢坡與五絕</button>
+        <button onclick="jumpToId('mem-song')" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-amber-200 transition truncate">🎸 校歌與金弦獎</button>
+        <button onclick="jumpToYear(1975)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">🗼 1975 精神堡壘</button>
+        <button onclick="jumpToYear(1994)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">📚 1994 啟明樓</button>
+        <button onclick="jumpToYear(2000)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">🏛️ 2000 改制國立</button>
+        <button onclick="jumpToYear(2018)" class="p-1.5 rounded-lg bg-slate-800/60 hover:bg-pink-500/30 text-left text-slate-200 transition truncate">🎉 2018 改隸市立</button>
+      </div>
+      <div class="mt-3 pt-2.5 border-t border-slate-700/60 text-[11px] text-slate-400 space-y-1">
+        <p>🖱️ <b>滾輪 / 上下鍵</b>：穿梭時光隧道</p>
+        <p>👆 <b>點擊 3D 晶體</b>：直接飛行至該年</p>
+        <p>📱 <b>觸控滑動</b>：手機上下滑動漫遊</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 底部時間軸進度條 -->
+  <footer class="fixed bottom-0 left-0 right-0 z-20 px-3 py-2.5 md:px-6 md:py-3 glass-panel border-b-0 border-x-0 rounded-t-2xl">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <span class="text-xs font-mono text-pink-400 font-bold shrink-0">1948</span>
+      <input
+        id="timeline-slider"
+        type="range"
+        min="0"
+        max="32"
+        value="0"
+        step="1"
+        oninput="onSliderInput(this.value)"
+        class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+      />
+      <span class="text-xs font-mono text-amber-400 font-bold shrink-0">2018</span>
+    </div>
+  </footer>
+
+  <!-- 搜尋與大事記總覽 Modal -->
+  <div id="search-modal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6">
+    <div class="glass-panel w-full max-w-4xl rounded-3xl p-4 md:p-6 max-h-[88vh] flex flex-col border border-pink-500/30">
+      <div class="flex items-center justify-between gap-4 mb-4 shrink-0">
+        <div>
+          <h2 class="serif-title text-xl md:text-2xl font-bold text-white">梅岡七十載．大事記全覽搜尋</h2>
+          <p class="text-xs text-slate-400">整合 60 週年《菁莪慶花甲》與 70 週年《迎曦御風》校史檔案</p>
+        </div>
+        <button onclick="toggleModal('search-modal')" class="w-9 h-9 rounded-full bg-slate-800 hover:bg-pink-600 text-white flex items-center justify-center text-lg transition">
+          ✕
+        </button>
+      </div>
+
+      <!-- 搜尋框 -->
+      <div class="mb-4 shrink-0">
+        <input
+          type="text"
+          id="search-input"
+          oninput="renderModalList(this.value)"
+          placeholder="輸入關鍵字搜尋（例如：張芳杰、史振鼎、好漢坡、啟明樓、金手獎、管樂、巧固球...）"
+          class="w-full px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-pink-500"
+        />
+      </div>
+
+      <!-- 列表區 -->
+      <div id="modal-list" class="overflow-y-auto custom-scroll flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 pr-1">
+        <!-- 動態產生 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 校史資料庫與 3D 互動腳本 -->
+  <script>
+    // =========================================================================
+    // 1. 整合校史資料庫 (1948 - 2018，融合《大事記1.pdf》與《大事記2.pdf》)
+    // =========================================================================
+    const HISTORY_DATA = [
+      {
+        id: "y1948",
+        year: 1948,
+        roc: "民國37年8月",
+        title: "縣立楊梅初中創校",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "首任校長張芳杰先生。",
+          "招收新生三班，開啟梅岡教育濫觴。",
+          "創校校址為縣立楊梅國中現址。"
+        ]
+      },
+      {
+        id: "y1951",
+        year: 1951,
+        roc: "民國40年8月",
+        title: "增設高中部，更名為縣立楊梅中學",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "縣立楊梅初中增設高中部，正式更名為「縣立楊梅中學」。",
+          "校長仍為張芳杰先生（張校長執掌縣立楊梅初中與楊梅中學共20年，於民國57年8月榮退）。",
+          "招收高中部新生一班。"
+        ]
+      },
+      {
+        id: "y1968",
+        year: 1968,
+        roc: "民國57年5月17日",
+        title: "省立楊梅高中奉准籌備",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "配合「九年國民義務教育」、「省辦高中縣辦初中」政策，省教育廳將縣立楊梅中學高中部改制為省立楊梅高中。",
+          "假當時縣立啟明初中校舍（即楊梅高中現址）。",
+          "籌備主任由當時省立桃園高中校長徐作霖先生兼任，並訂每年5月17日為校慶日。",
+          "創校過程中，先有啟明初中黃坤瀛校長之貢獻始奠校址；嗣有桃園高中徐作霖校長擘劃籌備始創基業；繼更賴駐軍第17師之協力，始有球場、跑道、看臺及國防體育運動設備。"
+        ]
+      },
+      {
+        id: "y1969",
+        year: 1969,
+        roc: "民國58年8月",
+        title: "省立楊梅高中正式創校與梅岡新村竣工",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "首任省中校長由史振鼎先生榮任。全校教職員工42人，學生11班，共計530人。",
+          "教務主任陳振安先生帶領楊梅中學高中部一、二年級共4班學生，由縣立楊梅中學步行至省立楊梅高中，完成學生移交手續。",
+          "同年年底（民國58年）教職員宿舍「梅岡新村」竣工，每戶樓上樓下廿三建坪（含臥室兩間、客廳、飯廳、廚房、廁所各一間）外更有前庭後院，兼具林園之勝與現代化設備。"
+        ],
+        quote: "「生是母校初中部第十七屆的畢業生，又在母校高中部讀了一年……不是因畢業而離去的我們，然而我們內心的徬徨和感傷，豈是局外人所能了解的呢？」",
+        quoteAuthor: "—— 童正足〈給母校——楊梅國中師長一封信〉（民國58年步行移交學生心情寫照）"
+      },
+      {
+        id: "mem-landscape",
+        year: 1969,
+        roc: "梅岡記憶專題",
+        title: "好漢坡、月眉橋、夢湖與五絕山五絕景",
+        category: "memory",
+        catName: "梅岡記憶",
+        color: "#f59e0b",
+        points: [
+          "【好漢坡（健身坡）與精神堡壘】：矗立在進門左方花園中的精神堡壘及通往山下的好漢坡，是田徑隊「梅岡羚羊」與歷屆學子鍛鍊體魄的象徵。",
+          "【月眉橋】：上好漢坡前必經之地，像衛士般屹立在梅岡前，伴隨泛黃小路燈、流水、鵝卵石與瀑布聲。",
+          "【夢湖】：清晨與黃昏同學漫步湖邊、堤旁看書、欣賞白鵝戲水與綠茵草地的夢幻平原。",
+          "【五絕山五絕景】：梅岡所居之地號稱五絕山，擁有「鏡湖邀霞」、「飛鶴點水」、「小樓迎風」、「西廂待月」、「斷崖醒魂」五個絕世之景。"
+        ],
+        quote: "「初到梅高，好不容易隨著學長爬上好漢坡，學長拉著我走向『梅高精神堡壘』前並說道：『剛才咱們爬的那叫好漢坡，她象徵著梅高的精神』。」",
+        quoteAuthor: "—— 皖兔兒、惠玲〈梅岡小覽〉、王文進〈五絕景在梅岡〉"
+      },
+      {
+        id: "mem-song",
+        year: 1970,
+        roc: "梅岡記憶專題",
+        title: "「校歌」源流、金弦獎與第二校歌「梅岡寄情」",
+        category: "memory",
+        catName: "梅岡記憶",
+        color: "#f59e0b",
+        points: [
+          "【校歌源流】：由史振鼎校長撰定歌詞重點後，恭請陳抱南、張身華、董桂生、江應龍、邵倩儂、張仰續先生研究試稿，最後由史校長選編而成，並請名音樂家李永剛先生譜曲。",
+          "【梅岡寄情】：吉他社傳統「金弦獎吉他彈唱大賽」中發表之作品，成為傳唱全校的第二校歌——《梅岡寄情》。",
+          "【行軍記】：早期全校師生分兩路行軍前往「香山堂」，途中結合防空演習偽裝比賽，同學們背著塞滿零食與書本的書包，「手不釋卷」歡笑前行。"
+        ],
+        quote: "「金弦獎吉他彈唱大賽，自創社以來，不僅是吉他社傳統，更是梅岡傳統，我們的第二校歌——『梅岡寄情』，即是於金弦中所發表的作品。」",
+        quoteAuthor: "—— 李秋鈴〈關於金弦獎〉、〈偉哉！梅岡絃歌正悠揚〉"
+      },
+      {
+        id: "y1970",
+        year: 1970,
+        roc: "民國59年",
+        title: "訂定校訓「愛自己、愛學校、愛國家」與校園擴建",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "史振鼎校長任內訂定梅高校訓為：「愛自己、愛學校、愛國家」。",
+          "大幅擴充硬體：增建教室16間、科學館1棟、教師眷舍11棟、廁所2間、軍械庫1間、籃球場4座、深水井1口，教學實驗設備與體育器材購置齊全。",
+          "【早期宿舍傳奇】：分設山上「和尚院」（男生宿舍，常能品嚐校長夫人親手做的宵夜）與山下「修女院」（女生宿舍，原址曾為原子氣體工廠，由年輕的蔡修女擔任舍監指導生活與課業）。",
+          "【住宿生採買】：早期住宿生須輪流於清晨四點半起床赴市場採買食材，與早起衝刺的高三考生形成獨特風景。"
+        ],
+        quote: "「本校附設上、下兩院，山上和尚院，山下修女院，千里迢迢，互不干涉……我們的舍監『蔡修女』從日常生活到功課，甚至少女的煩惱，她都指導我們。」",
+        quoteAuthor: "—— 張喆〈我們這一群〉、《梅青》"
+      },
+      {
+        id: "y1971",
+        year: 1971,
+        roc: "民國60年 - 62年",
+        title: "桃聯榜首周蓮香入學、班級成長與首創梅岡交通車",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "民國60年：桃園區高中聯招榜首周蓮香同學以616高分第一志願進入梅高就讀（日後考取台大動物系、留美獲博士學位並任教台大，研究鯨魚享譽國際，民67年曾回母校任教生物一年）。",
+          "班級快速成長：民60年28班（1294人）→ 民61年34班（1484人）→ 民62年37班（教職員工90人、學生1580人）。",
+          "民60年9月12日：正式設置交通車（向亞細亞旅行社租用大型遊覽車兩部），往返楊梅火車站與梅岡之間。",
+          "民61年3月：一年級徐菊嬌練習中距離僅三個半月即破全縣中運會三項紀錄獲三金；高女八項比賽囊括所有冠軍並創六項新紀錄。"
+        ],
+        quote: "「因為『好漢坡』很陡，而較古老的校車爬至此，馬力不夠便將車上的所有乘客『放鴿子』，等人下光了，司機油門一踩又繼續往上爬，而路上的學子，也只有跺腳的份了。」",
+        quoteAuthor: "—— 蔡玉萍〈梅岡城的故事〉、梁玉凌〈擠校車的歲月〉"
+      },
+      {
+        id: "y1974",
+        year: 1974,
+        roc: "民國63年8月",
+        title: "增設電工科及電子設備修護科",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "配合國家經濟建設奉令兼辦職業類科，自63年8月1日起招收電子設備修護科、電工科學生各兩班。",
+          "楊梅高中因之成為具多元教育目標之綜合型高中。",
+          "第一屆工科學生每週有兩天實習課，使用全新機器組裝收音機試聽，課後分工打掃並為工具上油保養。"
+        ],
+        quote: "「進了工廠，拿起機器，要把裝好的收音機打開試聽。同學們都歡天喜地的伴著歌聲音樂進入工作……至於上油的同學，慷慨者給塗上二層厚的『資生堂』，化妝得不下于白嘉莉呢！」",
+        quoteAuthor: "—— 葉佳鋪〈實習記〉"
+      },
+      {
+        id: "y1975",
+        year: 1975,
+        roc: "民國64年1月 - 2月",
+        title: "設置「梅岡精神堡壘」、馮堯春校長到任",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "64年1月：史振鼎校長任內設置「梅岡精神堡壘」，基座銘刻梅高建校史與梅高精神。",
+          "64年2月：馮堯春校長到任，史振鼎校長榮調省立新竹高中。",
+          "同年禮堂（兼體育館）與圖書館正式動工興建。"
+        ]
+      },
+      {
+        id: "y1976",
+        year: 1976,
+        roc: "民國65年 - 66年",
+        title: "操場擴建為400米跑道、禮堂兼體育館落成",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "加強實施早自修、第八節與晚自修（早讀晚讀制度）。",
+          "成立「輔導中心」，聘請專長教師定期測驗調查學生性格、學習困擾與社交狀況。",
+          "經馮堯春校長奔走，由縣府補助50萬、鎮公所配合50萬、教育廳撥款20萬，將操場300米跑道擴建為400米，促使梅高成為楊梅鎮體育活動中心。",
+          "民國66年（1977年）5月：禮堂（兼體育館）正式落成。"
+        ]
+      },
+      {
+        id: "y1978",
+        year: 1978,
+        roc: "民國67年8月 - 68年3月",
+        title: "董寶鏡校長到任、圖書館落成與闢建「鏡池」",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "67年8月：董寶鏡校長到任，馮堯春校長榮調省立桃園高中。",
+          "68年3月：圖書館落成、整建行政大樓改為鋼筋水泥屋頂。",
+          "於導師室前空地闢建「鏡池」。",
+          "興建理工大樓，充實職業科實習工場及普通科實驗室設備。"
+        ],
+        quote: "「為了表現本班的團隊精神，要在群雄匯集中脫穎而出，不惜烈日當頭，風沙四起的中午，在大操場中前進，再加上黃沙滾滾，我們的隊伍有如萬馬奔騰，聲勢浩大。」",
+        quoteAuthor: "—— 翁林華〈梅岡寄情——軍歌篇之三〉"
+      },
+      {
+        id: "y1983",
+        year: 1983,
+        roc: "民國72年2月 - 8月",
+        title: "欒澤秋校長到任、附設高級進修補校與延長職教班",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "72年2月：欒澤秋校長到任，董寶鏡校長榮退。",
+          "72年8月：附設高級進修補校，並參與試辦「延長以職業教育為主的國民教育」（延長職教班）。",
+          "利用職業科現有設備，新設「家庭電器修護科」及「電子自動控制科」兩科，採補校式學時制於夜間上課，嘉惠附近失學青年。"
+        ]
+      },
+      {
+        id: "y1986",
+        year: 1986,
+        roc: "民國75年2月 - 8月",
+        title: "郭治華校長到任、電機電子科更名與創設體育班",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "75年2月：郭治華校長到任，欒澤秋校長榮退。",
+          "電工科正式易名為「電機科」，電子設備修護科易名為「電子科」。",
+          "75年8月：奉教育廳核准，創設「體育班」，招收體育實驗班一班。",
+          "學生活動中心一樓工程完成。"
+        ]
+      },
+      {
+        id: "y1987",
+        year: 1987,
+        roc: "民國76年 - 77年",
+        title: "購置國宅學生宿舍、興建餐廳與試辦選修微電腦課程",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "76年2月：購置國宅兩棟（十戶為男學生宿舍，十戶為女學生宿舍），並興建學生餐廳、員生消費合作社。",
+          "76年4月：北區六縣市中學羽球賽獲第一名、桌球賽第三名；台灣區中運會獲全省高中羽球團體第五名。",
+          "77年9月（1988年）：奉省教育廳指示試辦綜合高中課程實驗，由普通科高三學生選修微電腦專業課程。"
+        ]
+      },
+      {
+        id: "y1990",
+        year: 1990,
+        roc: "民國79年 - 80年",
+        title: "巧固球、射箭與田徑稱霸全國，活動中心二樓完工",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "79年12月：全國中正盃巧固球賽獲全國高男第一名、射箭賽獲全國高男第二名；桃園越野賽獲全縣高女第一名。",
+          "80年（1991年）：學生活動中心二樓工程完成。",
+          "80年體育佳績：台灣區中運會巧固球全國高男第一名、楊紅煥獲全國一萬公尺第二名；全國田徑分齡賽楊紅煥第二名、鄧梅秀第三名；區運會巧固球榮獲全國社男第一名、社女第一名。"
+        ],
+        quote: "「9月27日，學校舉行越野賽跑。完了！當康樂股長宣布這個壞消息時，我的腿都軟了……只是學校規定一定要跑，我看我劫數難逃了！」",
+        quoteAuthor: "—— 林志忠〈越野賽跑記之四〉"
+      },
+      {
+        id: "y1992",
+        year: 1992,
+        roc: "民國81年 - 82年",
+        title: "行政大樓改建與活動中心三樓完工、設立美術資優班",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "81年硬體擴充：學生活動中心三樓工程完成、行政大樓改建完工（4樓建築）。",
+          "81年體育巔峰：桃園越野賽全縣高男、高女雙料第一名；全國田徑分齡賽國手黃信平獲全國第二名；台灣區運會獲全國社男四百接力第一名。",
+          "設立美術班：甄選出45位美術資優同學，每週擁有五堂專業美術課。",
+          "82年（1993年）：全國青年盃射箭高男第二名、台灣區運會全國社男及社女巧固球雙料第一名。"
+        ]
+      },
+      {
+        id: "y1994",
+        year: 1994,
+        roc: "民國83年6月 - 8月",
+        title: "圖書館「啟明樓」落成、孔建國校長到任與闢建「鼎園」",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "83年6月：圖書館改建完工（地下1層、地上5層），為紀念原校址縣立啟明初中，命名為「啟明樓」。",
+          "83年8月：孔建國校長到任，郭治華校長榮退。",
+          "83年8月硬體擴充：操場 PU 跑道鋪設完成、禮堂（兼體育館）改建完成（地下1層、地上2層）、精神堡壘區之松林闢建為「鼎園」。"
+        ]
+      },
+      {
+        id: "y1995",
+        year: 1995,
+        roc: "民國84年",
+        title: "試行「學年學分制」與改變校服款式",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "改變校服款式，展現學子嶄新風貌。",
+          "開始試行「學年學分制」，使普通科學生多了重補修機會，以補修不及格科目取代傳統「留級制」。",
+          "試行「電子學群、微電腦學群」學程。"
+        ]
+      },
+      {
+        id: "y1997",
+        year: 1997,
+        roc: "民國86年 - 88年",
+        title: "鍾香華校長到任、改建校門與加入「綜合高中」試辦",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "86年8月（1997年）：鍾香華校長到任，孔建國校長榮調省立員林高中。",
+          "87年9月（1998年）：改建校門，同年體育班停招。",
+          "88年9月（1999年）：加入教育部「綜合高中」試辦計畫行列，將電機科改辦資訊科，並明定「生涯規劃」及「生命教育」為高一校定必修課程。"
+        ]
+      },
+      {
+        id: "y2000",
+        year: 2000,
+        roc: "民國89年2月1日",
+        title: "省立楊梅高中改制為「國立楊梅高中」",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "89年2月1日：配合精省政策，正式由「台灣省立楊梅高級中學」改制為「國立楊梅高級中學」。",
+          "89年9月：推動梅高學生擔任怡仁醫院志工服務工作（每週六上午進行病患推送、量血壓等服務）。",
+          "民國90年（2001年）：綜合高中從試辦回歸正常學制，全面以「綜合高中」面貌肩負教育使命。"
+        ]
+      },
+      {
+        id: "y2003",
+        year: 2003,
+        roc: "民國92年 - 93年",
+        title: "桃園區社區化總召學校、日本教育旅行與多元學程",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "92年2月：進修學校停招；92年9月擔任「桃園區社區化總召學校」。",
+          "93年5月（2004年）：首度舉辦日本教育旅行參訪活動，由鍾香華校長率領師生赴日交流。",
+          "93年8月：綜合高中學程多元化，設有社會、自然、資訊、電子、應用外語與商業服務等學程，並設「語文資優班」。",
+          "93年10月：榮獲教育部「數理領域」特色發展專案補助。"
+        ]
+      },
+      {
+        id: "y2005",
+        year: 2005,
+        roc: "民國94年8月 - 12月",
+        title: "蘇景進校長到任、增設管樂/英文/數理專長班",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "94年8月：蘇景進校長到任，鍾香華校長榮退。",
+          "94年8月：增設「管樂班」、「英文專長班」及「數理專長班」各一班。",
+          "94年11月：管樂隊榮獲桃園縣學生音樂比賽優等。",
+          "94年12月：首度承辦「全國高級中等學校性別平等、生命教育議題融入教案設計甄選比賽、頒獎典禮暨觀摩研習」，並連續主辦三年。"
+        ]
+      },
+      {
+        id: "y2006",
+        year: 2006,
+        roc: "民國95年5月 - 11月",
+        title: "榮選教育部「優質高中」、創刊《梅岡風》與建構能源館",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "95年8月：普通科增招2班為14班；9月開辦學生「夜讀」，並榮選教育部「優質高中」補助。",
+          "95年10月：圖書館編纂校刊《梅岡風》創刊號出刊；圖書館5樓中小型演藝廳裝潢動工。",
+          "95年10月：獲教育部「能源發展」專案補助，與中央大學奈米科技中心合作發展桃三區能源計畫，建置風力與太陽能發電硬體。",
+          "95年11月：興建教室走廊風雨窗、進行廁所美化工程、建構桃三區能源發展館（校史室移至三樓）。"
+        ]
+      },
+      {
+        id: "y2007",
+        year: 2007,
+        roc: "民國96年2月 - 11月",
+        title: "四大樓命名決選（御風、迎曦、悅知、蘊慧）與班級冷氣建置",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "96年2月：全校班級教室冷氣建置工程完成。",
+          "96年5月：主辦桃園區國中基測試務；楊梅高中學報《集思梅岡》創刊號出刊；出版《竹劍與鋤頭-1927年中壢農民事件研究》。",
+          "96年5月：圖書館完成「梅岡建築物」命名決選——西側大樓命名「御風樓」、東側大樓「迎曦樓」、教學大樓「悅知樓」、行政大樓「蘊慧樓」。",
+          "96年11月：陳雋蕙及邱逸華老師分別榮獲全國生命教育類優等及性別平等類甲等。"
+        ]
+      },
+      {
+        id: "y2008",
+        year: 2008,
+        roc: "民國97年（創校60週年）",
+        title: "菁莪慶花甲．梅岡展風華：紅土藝術空間啟用與增設資訊科",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "歡慶六十週年校慶，「紅土藝術空間」正式啟用，並奉准增加資訊科一班。",
+          "語文競賽佳績：胡誌強獲全國國語文競賽原住民演說高中組第三名（全縣第一名）；周傳瑛老師獲高中教師組國語朗讀第二名。",
+          "音樂與體育：管樂社獲桃園縣音樂比賽合奏優等、李萱獲古箏獨奏第一名；游泳隊獲主委盃100仰第二名、200混合第三名。"
+        ]
+      },
+      {
+        id: "y2009",
+        year: 2009,
+        roc: "民國98年",
+        title: "全國工科技藝競賽雙優勝、美術與泳隊大放異彩",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "98學年度全國工科技藝競賽：廖至合獲「電腦修護」優勝（楊青山老師指導）、賴建凱獲「工業電子」優勝（陳志宏老師指導）。",
+          "中小學聯運游泳高中男生組200公尺仰式第一名、100公尺仰式第二名，達全中運參賽標準。",
+          "桃園縣美術比賽：葉劉君宜獲西畫類第一名、莊宗諶書法第二名、羅亭惠水墨第三名。",
+          "張梅玲老師獲資訊融入教學生物科佳作；鍾國俊老師獲全國節能創意教學設計入選。"
+        ]
+      },
+      {
+        id: "y2010",
+        year: 2010,
+        roc: "民國99年2月 - 8月",
+        title: "林桂鳳校長接任第九任校長、健康促進重點學校與國防教學卓越",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "99年2月1日：蘇景進校長榮退，由林裕豐主任代理校長；99年8月1日：林桂鳳校長到任，接任第九任校長。",
+          "獲選為「健康促進學校重點學校」並擔任北二區召集學校；首度與楊梅扶輪社合作辦理職業介紹活動。",
+          "教師與社團殊榮：春暉社獲「教育部春暉績優社團」、邱逸華老師獲教育部生命教育教案優等、袁素卿護理師獲實務卓越獎、余成竣主任教官獲教育部全國全民國防教育教學卓越獎。",
+          "學生表現：楊伊涵獲縣美術比賽水墨畫第一名；壘球社獲縣長盃棒球錦標賽高中準硬式組亞軍。"
+        ]
+      },
+      {
+        id: "y2011",
+        year: 2011,
+        roc: "民國100年",
+        title: "「人與地的對話」榮獲教育部教學卓越獎、全國英作第一名",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "劉湘櫻、賀華興、張珮茹、施文賢、張志銘、張梅玲老師團隊，以「人與地的對話」榮獲教育部「教學卓越獎」！",
+          "戲劇社參加教育部「父母心祖孫情全國戲劇競賽」榮獲全國第二名；校刊社榮獲「青花筆鋒」校園刊物比賽銀質獎。",
+          "李紫晴同學榮獲「全國學生英文作文比賽」第一名；丁沛嫺同學獲全國音樂比賽中胡獨奏第二名（優等）。",
+          "100年12月辦理「當代鄉土文學大師身影-黃春明藝文週」；劉怡君、鄭凱鴻、劉湘櫻、張志銘等老師分獲教育部與客委會教案優等。"
+        ]
+      },
+      {
+        id: "y2012",
+        year: 2012,
+        roc: "民國101年",
+        title: "日新樓開工動土、數位電子奪全國金手獎第一名",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "101年8月14日：「日新樓」開工動土典禮。",
+          "張昌祺同學參加「101學年度全國工科技藝競賽」榮獲「數位電子」職種「金手獎第一名」（呂俊郎老師指導）！",
+          "鍾國俊老師榮獲「2012全國創意教學 KDP 國際認證獎」暨「學校經營創新 KDP 國際認證獎-特優」。",
+          "桃園縣美術比賽蕭毓淳獲西畫第一名、佘佛國獲水墨第一名；羽球社獲縣長盃高男團體第二名。"
+        ]
+      },
+      {
+        id: "y2013",
+        year: 2013,
+        roc: "民國102年",
+        title: "專業類科評鑑榮獲一等、全國科展數學第三名與日本飯南高校交流",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "專業類科評鑑總評榮獲「一等」（資訊科、電子科、應用英語學程皆獲一等）；同年5月9日再獲優質高中認證。",
+          "陳芊妤、張博舜、傅筱婷、康書維同學以「來人啊！把訊息傳出去。」榮獲2013年全國高中組科展數學科「第三名」暨北二區特優（賴申洲、蘇重文老師指導）。",
+          "日本飯南高校首度蒞校交流（102年-106年持續交流）。",
+          "沈珮妤老師獲桃園市國語文競賽教師國語朗讀第一名；佘佛國獲西畫第一名、莊智雄獲書法第一名；張雯婷獲香港國際古箏比賽銀獎與臺灣區金獎。"
+        ]
+      },
+      {
+        id: "y2014",
+        year: 2014,
+        roc: "民國103年6月6日",
+        title: "「梅高66 日新又新」日新樓落成典禮、世界機關王冠軍",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "103年6月6日：舉行「梅高66 日新又新」日新樓落成典禮！",
+          "榮獲「健康促進學校國際認證銅質獎」。",
+          "呂英全同學參加「2014年世界機關王大賽」榮獲冠軍；劉佳奇同學於中小學聯運5000公尺競走破大會紀錄；棒球隊獲縣長盃鋁棒組與理事長盃軟式組雙料冠軍。",
+          "何詩欽老師、徐玟瑜老師指導學生分別榮獲校園綠點子競賽特優第一名、全國高職專題製作「魔法窗簾」全國優勝與科展「電子捕蠅草」優等。"
+        ]
+      },
+      {
+        id: "y2015",
+        year: 2015,
+        roc: "民國104年",
+        title: "「埤塘新樂園」再奪教育部教學卓越獎、工科技藝金手獎",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "林桂鳳校長、劉湘櫻老師、楊青山老師、賀華興老師、崔宇華老師團隊，以「埤塘新樂園」榮獲教育部「教學卓越獎」！",
+          "全國工科技藝競賽：古家弘獲「數位電子」金手獎（呂俊郎老師指導）、黃偉華獲「工業電子」優勝、莊人傑獲「電腦軟體設計」優勝。",
+          "簡樹桐老師、何詩欽老師、徐玟瑜老師指導學生於第55屆北區科展及全國專題競賽囊括多項優等與佳作。",
+          "辦理「詩人陳芳明的文學與美學藝文月」；香港東華三院蒞校參訪生涯規劃課程。"
+        ]
+      },
+      {
+        id: "y2016",
+        year: 2016,
+        roc: "民國105年5月 - 12月",
+        title: "公共藝術「梅岡鹿鳴」落成、環境教育獎與兩岸文學交流",
+        category: "campus",
+        catName: "校園建設",
+        color: "#38bdf8",
+        points: [
+          "105年5月7日：綜合教學大樓公共藝術設置計畫完工落成，作品名稱「梅岡鹿鳴」。",
+          "賀華興老師榮獲「105年國家環境教育推展有功人員」；學校榮獲桃園市校際資源回收競賽優等。",
+          "溫思愷獲桃園市美術比賽西畫第一名；黎艾昀獲全中運高女桌球單打第八名；楊凱仲獲全國工科技藝競賽工業電子優勝。",
+          "上海海事大學附屬北蔡高級中學師生蒞校進行文學教學與社團展演交流；辦理作家瓦歷斯．諾幹藝文月。"
+        ]
+      },
+      {
+        id: "y2017",
+        year: 2017,
+        roc: "民國106年",
+        title: "主辦桃連區免試入學試務、蔡明峰奪電腦修護金手獎",
+        category: "honor",
+        catName: "卓越榮耀",
+        color: "#10b981",
+        points: [
+          "主辦「桃連區高級中等學校免試入學」大型試務工作。",
+          "蔡明峰同學參加105學年度全國工科技藝競賽榮獲「電腦修護」職種「金手獎」（簡樹桐老師指導）。",
+          "郭沛昕獲桃園市學生美術比賽水墨類第一名；管樂社獲桃園市音樂比賽合奏優等；棒球隊獲學生棒球聯賽軟式組桃園市E組第一名。",
+          "106年3月起全面導入雲端差勤系統，邁向智慧化校園行政。"
+        ]
+      },
+      {
+        id: "y2018",
+        year: 2018,
+        roc: "民國106年8月 - 107年5月（創校70週年）",
+        title: "改隸「桃園市立楊梅高級中等學校」、鄒岳廷校長到任與校史室啟用",
+        category: "milestone",
+        catName: "創校與改制",
+        color: "#f43f5e",
+        points: [
+          "106年8月1日：林桂鳳校長榮調國立竹東高中，鄒岳廷校長接任第十任校長。",
+          "107年1月1日：正式由國立改隸為「桃園市立楊梅高級中等學校」（106年12月29日舉行揭牌儀式）。",
+          "學校與群科評鑑總評皆獲「甲等」（電子科榮獲最高榮譽「優等」）；彭景聲同學再奪全國工科技藝競賽「電腦修護」金手獎（簡樹桐老師指導）、鄭敏鎧獲工業電子優勝。",
+          "劉湘櫻、賀華興、楊偉裕、江宜澂老師以「梅岡人、埤塘心、在地情」獲國立台灣圖書館台灣鄉土教學優良教材優選；木球隊奪市長盃高中團體第一名。",
+          "107年5月26日：全新「校史室」正式揭牌啟用，見證梅岡七十載璀璨風華！"
+        ]
+      }
+    ];
+
+    // =========================================================================
+    // 2. 全域狀態與篩選管理
+    // =========================================================================
+    let filteredData = [...HISTORY_DATA];
+    let currentIndex = 0;
+    let currentCategory = 'all';
+    let isAutoPlaying = false;
+    let autoPlayTimer = null;
+
+    // 更新全部按鈕數量
+    document.querySelector('[data-cat="all"]').textContent = `全部 (${HISTORY_DATA.length})`;
+
+    // =========================================================================
+    // 3. Three.js 3D 螺旋時光隧道場景建構
+    // =========================================================================
+    const canvas = document.getElementById('webgl-canvas');
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070b19, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x070b19, 1);
+
+    // 燈光配置
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambientLight);
+
+    const pointLight1 = new THREE.PointLight(0xf43f5e, 2.5, 120);
+    pointLight1.position.set(10, 15, 10);
+    scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0x38bdf8, 2, 120);
+    pointLight2.position.set(-15, -10, -40);
+    scene.add(pointLight2);
+
+    // 3D 節點群組與軌道線群組
+    const nodesGroup = new THREE.Group();
+    scene.add(nodesGroup);
+
+    let nodeMeshes = [];
+    let pathCurve = null;
+    let tubeMesh = null;
+
+    // 產生年份文字 Sprite 貼圖
+    function createLabelSprite(yearText, titleText, hexColor) {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      // 半透明背板
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.strokeStyle = hexColor;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(16, 24, 480, 190, 28);
+      } else {
+        ctx.rect(16, 24, 480, 190);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // 年份大字
+      ctx.fillStyle = hexColor;
+      ctx.font = '900 64px "Noto Serif TC", serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(yearText, 256, 105);
+
+      // 標題小字 (截斷保護)
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '600 30px "Noto Sans TC", sans-serif';
+      const shortTitle = titleText.length > 13 ? titleText.slice(0, 13) + '…' : titleText;
+      ctx.fillText(shortTitle, 256, 168);
+
+      const texture = new THREE.CanvasTexture(c);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(7.5, 3.75, 1);
+      return sprite;
+    }
+
+    // 依據目前篩選的資料建立 3D 節點與發光軌道
+    function build3DTimeline() {
+      // 清除舊物件
+      while (nodesGroup.children.length > 0) {
+        nodesGroup.remove(nodesGroup.children[0]);
+      }
+      if (tubeMesh) {
+        scene.remove(tubeMesh);
+        tubeMesh.geometry.dispose();
+        tubeMesh.material.dispose();
+      }
+      nodeMeshes = [];
+
+      const curvePoints = [];
+      const spacingZ = 18; // 每個節點的 Z 軸距離
+
+      filteredData.forEach((item, idx) => {
+        // 螺旋曲線座標計算
+        const angle = idx * 0.55;
+        const radius = 6.5;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * (radius * 0.65);
+        const z = -idx * spacingZ;
+
+        const pos = new THREE.Vector3(x, y, z);
+        curvePoints.push(pos);
+
+        // 依類別決定 3D 幾何體形狀
+        let geom;
+        if (item.category === 'milestone') {
+          geom = new THREE.OctahedronGeometry(1.45, 0); // 精神堡壘八面晶體
+        } else if (item.category === 'campus') {
+          geom = new THREE.BoxGeometry(1.8, 1.8, 1.8); // 建築方塊
+        } else if (item.category === 'memory') {
+          geom = new THREE.TorusKnotGeometry(0.95, 0.28, 64, 12); // 梅岡記憶流線結
+        } else {
+          geom = new THREE.IcosahedronGeometry(1.35, 0); // 榮耀寶石二十面體
+        }
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(item.color),
+          emissive: new THREE.Color(item.color),
+          emissiveIntensity: 0.35,
+          roughness: 0.2,
+          metalness: 0.7
+        });
+
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.copy(pos);
+        mesh.userData = { index: idx, item };
+
+        // 外圍光環
+        const ringGeom = new THREE.RingGeometry(1.8, 2.05, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(item.color),
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.5
+        });
+        const ring = new THREE.Mesh(ringGeom, ringMat);
+        mesh.add(ring);
+
+        // 懸浮文字看板
+        const label = createLabelSprite(String(item.year), item.title, item.color);
+        label.position.set(0, 2.9, 0);
+        mesh.add(label);
+
+        nodesGroup.add(mesh);
+        nodeMeshes.push(mesh);
+      });
+
+      // 建立貫穿所有節點的光軌曲線
+      if (curvePoints.length >= 2) {
+        pathCurve = new THREE.CatmullRomCurve3(curvePoints);
+        const tubeGeom = new THREE.TubeGeometry(pathCurve, filteredData.length * 12, 0.12, 8, false);
+        const tubeMat = new THREE.MeshBasicMaterial({
+          color: 0xf472b6,
+          transparent: true,
+          opacity: 0.35
+        });
+        tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
+        scene.add(tubeMesh);
+      }
+
+      // 更新滑桿最大值
+      const slider = document.getElementById('timeline-slider');
+      slider.max = Math.max(0, filteredData.length - 1);
+      slider.value = 0;
+    }
+
+    // 漫天梅花星塵粒子系統
+    const particleCount = 1200;
+    const particleGeom = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    const palette = [
+      new THREE.Color('#f43f5e'),
+      new THREE.Color('#f472b6'),
+      new THREE.Color('#fbbf24'),
+      new THREE.Color('#38bdf8')
+    ];
+
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 90;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 90;
+      positions[i * 3 + 2] = -Math.random() * 750 + 30;
+
+      const c = palette[Math.floor(Math.random() * palette.length)];
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+
+    particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const particleMat = new THREE.PointsMaterial({
+      size: 0.45,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.75
+    });
+    const starField = new THREE.Points(particleGeom, particleMat);
+    scene.add(starField);
+
+    // =========================================================================
+    // 4. 鏡頭飛行與 UI 同步邏輯
+    // =========================================================================
+    function focusNode(index, immediate = false) {
+      if (filteredData.length === 0) return;
+      currentIndex = Math.max(0, Math.min(index, filteredData.length - 1));
+
+      const targetMesh = nodeMeshes[currentIndex];
+      const item = filteredData[currentIndex];
+      if (!targetMesh || !item) return;
+
+      // 桌機與手機鏡頭偏移最佳化 (讓左側資訊卡不遮擋 3D 節點)
+      const isMobile = window.innerWidth < 768;
+      const offsetX = isMobile ? 0 : -3.2;
+      const offsetY = isMobile ? -1.8 : 0.6;
+      const offsetZ = isMobile ? 11.5 : 9.5;
+
+      const targetCamPos = {
+        x: targetMesh.position.x + offsetX,
+        y: targetMesh.position.y + offsetY,
+        z: targetMesh.position.z + offsetZ
+      };
+
+      // 高亮當前節點
+      nodeMeshes.forEach((m, idx) => {
+        const isCurrent = idx === currentIndex;
+        gsap.to(m.scale, {
+          x: isCurrent ? 1.35 : 0.85,
+          y: isCurrent ? 1.35 : 0.85,
+          z: isCurrent ? 1.35 : 0.85,
+          duration: 0.6
+        });
+        m.material.emissiveIntensity = isCurrent ? 0.85 : 0.25;
+      });
+
+      // 鏡頭平滑飛行
+      if (immediate) {
+        camera.position.set(targetCamPos.x, targetCamPos.y, targetCamPos.z);
+      } else {
+        gsap.to(camera.position, {
+          x: targetCamPos.x,
+          y: targetCamPos.y,
+          z: targetCamPos.z,
+          duration: 1.1,
+          ease: "power3.out"
+        });
+      }
+
+      // 移動動態光源跟隨鏡頭
+      pointLight1.position.set(targetCamPos.x + 8, targetCamPos.y + 8, targetCamPos.z + 5);
+
+      // 更新 UI 卡片
+      updateCardUI(item, currentIndex);
+
+      // 同步底部滑桿
+      document.getElementById('timeline-slider').value = currentIndex;
+    }
+
+    function updateCardUI(item, index) {
+      document.getElementById('card-year').textContent = item.year;
+      document.getElementById('card-roc').textContent = `(${item.roc})`;
+      document.getElementById('card-title').textContent = item.title;
+      document.getElementById('card-index').textContent = index + 1;
+      document.getElementById('card-total').textContent = filteredData.length;
+
+      const badge = document.getElementById('card-badge');
+      badge.textContent = item.catName;
+      badge.style.borderColor = item.color;
+      badge.style.color = item.color;
+
+      const pointsList = document.getElementById('card-points');
+      pointsList.innerHTML = item.points
+        .map(p => `<li class="leading-relaxed">${p}</li>`)
+        .join('');
+
+      const quoteBox = document.getElementById('card-quote-box');
+      if (item.quote) {
+        quoteBox.classList.remove('hidden');
+        document.getElementById('card-quote').textContent = item.quote;
+        document.getElementById('card-quote-author').textContent = item.quoteAuthor || '';
+      } else {
+        quoteBox.classList.add('hidden');
+      }
+    }
+
+    // =========================================================================
+    // 5. 互動控制：前後站、分類篩選、自動導覽、3D 點擊與手勢
+    // =========================================================================
+    function navigateStep(delta) {
+      const next = currentIndex + delta;
+      if (next >= 0 && next < filteredData.length) {
+        focusNode(next);
+      } else if (isAutoPlaying && next >= filteredData.length) {
+        focusNode(0); // 自動導覽循環回到起點
+      }
+    }
+
+    function onSliderInput(val) {
+      focusNode(parseInt(val, 10));
+    }
+
+    function filterCategory(cat) {
+      currentCategory = cat;
+      if (cat === 'all') {
+        filteredData = [...HISTORY_DATA];
+      } else {
+        filteredData = HISTORY_DATA.filter(d => d.category === cat);
+      }
+
+      // 更新按鈕樣式
+      document.querySelectorAll('.cat-btn').forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.classList.add('bg-pink-600', 'text-white');
+          btn.classList.remove('glass-panel', 'text-slate-200');
+        } else {
+          btn.classList.remove('bg-pink-600', 'text-white');
+          btn.classList.add('glass-panel', 'text-slate-200');
+        }
+      });
+
+      build3DTimeline();
+      focusNode(0, true);
+    }
+
+    function jumpToYear(year) {
+      if (currentCategory !== 'all') filterCategory('all');
+      const idx = filteredData.findIndex(d => d.year === year);
+      if (idx !== -1) focusNode(idx);
+    }
+
+    function jumpToId(id) {
+      if (currentCategory !== 'all') filterCategory('all');
+      const idx = filteredData.findIndex(d => d.id === id);
+      if (idx !== -1) focusNode(idx);
+    }
+
+    function toggleAutoPlay() {
+      isAutoPlaying = !isAutoPlaying;
+      const btn = document.getElementById('autoplay-btn');
+      if (isAutoPlaying) {
+        btn.textContent = '⏸ 暫停導覽';
+        btn.classList.add('glow-btn');
+        autoPlayTimer = setInterval(() => navigateStep(1), 4500);
+      } else {
+        btn.textContent = '▶ 自動導覽';
+        btn.classList.remove('glow-btn');
+        clearInterval(autoPlayTimer);
+      }
+    }
+
+    // 總覽搜尋 Modal
+    function toggleModal(id) {
+      const el = document.getElementById(id);
+      el.classList.toggle('hidden');
+      if (!el.classList.contains('hidden')) {
+        renderModalList(document.getElementById('search-input').value);
+      }
+    }
+
+    function renderModalList(keyword = '') {
+      const container = document.getElementById('modal-list');
+      const kw = keyword.trim().toLowerCase();
+      const matches = HISTORY_DATA.filter(item => {
+        const fullText = `${item.year} ${item.roc} ${item.title} ${item.points.join(' ')} ${item.quote || ''}`.toLowerCase();
+        return fullText.includes(kw);
+      });
+
+      if (matches.length === 0) {
+        container.innerHTML = `<p class="text-slate-400 text-sm col-span-2 text-center py-8">找不到符合「${keyword}」的校史紀錄</p>`;
+        return;
+      }
+
+      container.innerHTML = matches.map(item => `
+        <div onclick="selectFromModal('${item.id}')" class="p-3.5 rounded-2xl bg-slate-900/75 hover:bg-pink-500/20 border border-slate-800 hover:border-pink-500/50 cursor-pointer transition flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="serif-title font-bold text-lg text-pink-400">${item.year} <small class="text-xs text-slate-400 font-normal">(${item.roc})</small></span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">${item.catName}</span>
+            </div>
+            <h4 class="font-bold text-sm text-white mb-1.5">${item.title}</h4>
+            <p class="text-xs text-slate-300 line-clamp-2">${item.points[0]}</p>
+          </div>
+          <div class="text-right mt-2">
+            <span class="text-[11px] text-pink-400 font-medium">點擊飛往該站 →</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectFromModal(id) {
+      toggleModal('search-modal');
+      jumpToId(id);
+    }
+
+    // 滑鼠滾輪與鍵盤事件
+    let wheelTimeout = false;
+    window.addEventListener('wheel', (e) => {
+      // 若在卡片內部或 Modal 內捲動文字，不觸發 3D 飛行
+      if (e.target.closest('#info-card') || e.target.closest('#search-modal')) return;
+      if (wheelTimeout) return;
+      wheelTimeout = true;
+      if (e.deltaY > 15) navigateStep(1);
+      else if (e.deltaY < -15) navigateStep(-1);
+      setTimeout(() => { wheelTimeout = false; }, 420);
+    }, { passive: true });
+
+    window.addEventListener('keydown', (e) => {
+      if (!document.getElementById('search-modal').classList.contains('hidden')) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') navigateStep(1);
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') navigateStep(-1);
+    });
+
+    // 手機觸控滑動漫遊 (排除卡片內捲動)
+    let touchStartY = 0;
+    window.addEventListener('touchstart', (e) => {
+      if (e.target.closest('#info-card') || e.target.closest('#search-modal') || e.target.closest('header') || e.target.closest('footer')) return;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (!touchStartY) return;
+      const deltaY = touchStartY - e.changedTouches[0].clientY;
+      if (Math.abs(deltaY) > 45) {
+        if (deltaY > 0) navigateStep(1);
+        else navigateStep(-1);
+      }
+      touchStartY = 0;
+    }, { passive: true });
+
+    // Raycaster 點擊 3D 節點直接跳轉
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    canvas.addEventListener('pointerdown', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(nodeMeshes, false);
+      if (intersects.length > 0) {
+        const hitIndex = intersects[0].object.userData.index;
+        if (typeof hitIndex === 'number') {
+          focusNode(hitIndex);
+        }
+      }
+    });
+
+    // 視窗尺寸變更 RWD 處理
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      focusNode(currentIndex, true);
+    });
+
+    // =========================================================================
+    // 6. 動畫主迴圈
+    // =========================================================================
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // 節點自轉與懸浮呼吸感
+      nodeMeshes.forEach((mesh, idx) => {
+        mesh.rotation.y = elapsed * 0.6 + idx;
+        mesh.rotation.x = Math.sin(elapsed * 0.5 + idx) * 0.25;
+      });
+
+      // 星塵緩慢漂浮
+      starField.rotation.z = elapsed * 0.015;
+
+      renderer.render(scene, camera);
+    }
+
+    // 初始化啟動
+    build3DTimeline();
+    focusNode(0, true);
+    animate();
+
+    // =========================================================================
+    // 7. PWA Service Worker 註冊與安裝提示
+    // =========================================================================
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('pwa-install-btn').classList.remove('hidden');
+    });
+
+    async function installPWA() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        document.getElementById('pwa-install-btn').classList.add('hidden');
+      }
+      deferredPrompt = null;
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.log('Service Worker 註冊失敗:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
